@@ -113,11 +113,6 @@ SHM-System/
 
 ## 📊 Visualization Examples
 
-### Multi-Sensor Line Chart
-
-![Multi-Sensor Line Chart](./docs/example-linechart.png)
-
-> Example of multi-device trend visualization
 
 ### System Architecture Diagram
 
@@ -130,6 +125,12 @@ SHM-System/
 ![Case Study Dashboard](./docs/example-dashboard.png)
 
 > Real deployment example with multi-sensor data visualization and predictive results
+
+### Multi-Sensor Line Chart
+
+![Multi-Sensor Line Chart](./docs/example-linechart.png)
+
+> Example of multi-device trend visualization
 
 ---
 
