@@ -3,7 +3,7 @@
 Crack Meter Model Training Script
 
 Author: Li Mengyao
-
+Institution: Henan University
 """
 
 import json
@@ -15,10 +15,9 @@ import torch.nn as nn
 import pickle
 from datetime import datetime
 import os
-from statistics import mean, median
 import matplotlib.pyplot as plt
 
-df = pd.read_csv(r'train_data.csv', parse_dates=['time'])
+df = pd.read_csv(r'train_data.csv', parse_dates=['time'])   
 df.set_index("time", inplace=True)
 
 n_samples = len(df)
@@ -66,13 +65,13 @@ def create_dataset(df, m, n, lag):
         X_settlement.append(df[i:i+m, :4])
         X_crack.append(df[i:i+m, 4:7])
         X_tilt.append(df[i:i+m, 7:15])
-        X_env.append(df[i-lag+m:i+m, 15:])
+        X_env.append(df[i-lag+m:i+m, 15:])  
         y_settlement.append(df[i+m:i+m+n, :4])
         y_crack.append(df[i+m:i+m+n, 4:7])
         y_tilt.append(df[i+m:i+m+n, 7:15])
 
-    return (torch.tensor(X_settlement, dtype=torch.float32), torch.tensor(X_crack, dtype=torch.float32), torch.tensor(X_tilt, dtype=torch.float32),
-            torch.tensor(X_env, dtype=torch.float32),
+    return (torch.tensor(X_settlement, dtype=torch.float32), torch.tensor(X_crack, dtype=torch.float32), torch.tensor(X_tilt, dtype=torch.float32), 
+            torch.tensor(X_env, dtype=torch.float32), 
             torch.tensor(y_settlement, dtype=torch.float32), torch.tensor(y_crack, dtype=torch.float32), torch.tensor(y_tilt, dtype=torch.float32))
 
 
@@ -97,7 +96,7 @@ class TransformerEncoderLayer(nn.Module):
         ff_output = self.self_ff(x)
         x = self.norm2(x+self.dropout(ff_output))
         return x
-
+    
 
 class Conv1dLayer(nn.Module):
     def __init__(self, input_dim, output_dim, kernel_size, dropout):
@@ -112,7 +111,7 @@ class Conv1dLayer(nn.Module):
         x = self.dropout(self.relu(x))
         x = x.permute(0, 2, 1)
         return x
-
+    
 
 class TransformerCnn(nn.Module):
     def __init__(self, response_dim, env_dim, trans_dim, num_heads, ff_hidden_dim, 
@@ -265,20 +264,20 @@ from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 from torch.utils.data import DataLoader, TensorDataset
 
 
-def train_and_test(model, x_response_train, x_response_test, x_env_train, x_env_test, x_cat_train, x_cat_test,
+def train_and_test(model, x_response_train, x_response_test, x_env_train, x_env_test, x_cat_train, x_cat_test, 
                    y_response_train, y_response_test, scaler_response, num_epochs=200, patience=20):
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, weight_decay=1e-5)
     kf = KFold(n_splits=5)
-    batch_size = 32
+    batch_size = 32   
     history_records = []
-
+      
     for fold, (train_index, test_index) in enumerate(kf.split(x_response_train)):
         x_response_train_fold = x_response_train[train_index]
         x_env_train_fold = x_env_train[train_index]
         x_cat_train_fold = x_cat_train[train_index]
         y_response_train_fold = y_response_train[train_index]
-
+        
         x_response_val_fold = x_response_train[test_index]
         x_env_val_fold = x_env_train[test_index]
         x_cat_train_val_fold = x_cat_train[test_index]
@@ -305,9 +304,9 @@ def train_and_test(model, x_response_train, x_response_test, x_env_train, x_env_
                 x_batch_env = x_batch_env.to(device)
                 x_batch_cat = x_batch_cat.to(device)
                 y_batch = y_batch.to(device)
-
+                
                 optimizer.zero_grad()
-                output_fold = model(x_batch_response, x_batch_env, x_batch_cat)
+                output_fold = model(x_batch_response, x_batch_env, x_batch_cat) 
                 loss = criterion(output_fold, y_batch)
                 loss.backward()
                 optimizer.step()
@@ -315,7 +314,7 @@ def train_and_test(model, x_response_train, x_response_test, x_env_train, x_env_
                 train_samples += x_batch_response.size(0)
                 torch.cuda.empty_cache()
             train_loss_epoch /= max(train_samples, 1)
-
+            
             model.eval()
             with torch.no_grad():
                 val_loss = 0.0
@@ -330,10 +329,10 @@ def train_and_test(model, x_response_train, x_response_test, x_env_train, x_env_
                     batch_loss = criterion(val_output_fold, y_batch).item()
                     val_loss += batch_loss * x_batch_response.size(0)
                     val_samples += x_batch_response.size(0)
-
+    
                 val_loss /= max(val_samples, 1)
                 fold_history.append({"epoch": epoch + 1, "train_loss": train_loss_epoch, "val_loss": val_loss})
-
+                   
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 best_epoch = epoch + 1
@@ -353,13 +352,13 @@ def train_and_test(model, x_response_train, x_response_test, x_env_train, x_env_
         x_cat_train = x_cat_train.to(device)
         x_cat_test = x_cat_test.to(device)
         
-        output_train = model(x_response_train, x_env_train, x_cat_train)
+        output_train = model(x_response_train, x_env_train, x_cat_train) 
         output_test = model(x_response_test, x_env_test, x_cat_test)
-
+        
         y_response_train_inverse = scaler_response.inverse_transform(y_response_train.cpu().numpy().reshape(-1, y_response_train.shape[-1]))
         y_response_test_inverse = scaler_response.inverse_transform(y_response_test.cpu().numpy().reshape(-1, y_response_test.shape[-1]))
         output_train_inverse = scaler_response.inverse_transform(output_train.cpu().numpy().reshape(-1, output_train.shape[-1]))
-        output_test_inverse = scaler_response.inverse_transform(output_test.cpu().numpy().reshape(-1, output_test.shape[-1]))
+        output_test_inverse = scaler_response.inverse_transform(output_test.cpu().numpy().reshape(-1, output_test.shape[-1]))      
 
         r2_train_per_feature = []
         r2_test_per_feature = []
@@ -367,38 +366,38 @@ def train_and_test(model, x_response_train, x_response_test, x_env_train, x_env_
         rmse_test_per_feature = []
         mae_train_per_feature = []
         mae_test_per_feature = []
-
+    
         num_features = y_response_train_inverse.shape[1]
         for i in range(num_features):
             y_train_feature = y_response_train_inverse[:, i]
             y_test_feature = y_response_test_inverse[:, i]
             output_train_feature = output_train_inverse[:, i]
             output_test_feature = output_test_inverse[:, i]
-
+    
             r2_train_feature = r2_score(y_train_feature, output_train_feature)
             r2_test_feature = r2_score(y_test_feature, output_test_feature)
             rmse_train_feature = np.sqrt(mean_squared_error(y_train_feature, output_train_feature))
             rmse_test_feature = np.sqrt(mean_squared_error(y_test_feature, output_test_feature))
             mae_train_feature = mean_absolute_error(y_train_feature, output_train_feature)
             mae_test_feature = mean_absolute_error(y_test_feature, output_test_feature)
-
+    
             r2_train_per_feature.append(r2_train_feature)
             r2_test_per_feature.append(r2_test_feature)
             rmse_train_per_feature.append(rmse_train_feature)
             rmse_test_per_feature.append(rmse_test_feature)
             mae_train_per_feature.append(mae_train_feature)
             mae_test_per_feature.append(mae_test_feature)
-
+    
     return (r2_train_per_feature, r2_test_per_feature,
             rmse_train_per_feature, rmse_test_per_feature,
             mae_train_per_feature, mae_test_per_feature, output_train, output_test, history_records)
-best_r2_sum = -float('inf')
-best_r2_train = []
-best_r2_test = []
-best_rmse_train = []
-best_rmse_test = []
-best_mae_train = []
-best_mae_test = []
+best_r2_sum = -float('inf') 
+best_r2_train = []  
+best_r2_test = []  
+best_rmse_train = []  
+best_rmse_test = []  
+best_mae_train = []  
+best_mae_test = []   
 best_output_train = None
 best_output_test = None
 best_history_records = None
@@ -406,10 +405,6 @@ best_epoch_info_summary = None
 best_run_dir = None
 best_run_index = None
 
-ensemble_top_k = 5
-ensemble_models = []
-ensemble_save_dir = "ensemble_models"
-os.makedirs(ensemble_save_dir, exist_ok=True)
 analysis_save_dir = "analysis_outputs"
 ensure_dir(analysis_save_dir)
 
@@ -451,7 +446,7 @@ x_settlement_train, x_crack_train, x_tilt_train, x_env_train, y_settlement_train
 x_settlement_test, x_crack_test, x_tilt_test, x_env_test, y_settlement_test, y_crack_test, y_tilt_test = create_dataset(df_normalized_test, m, n, lag)
 
 x_train = torch.cat([torch.tensor(x_settlement_train, dtype=torch.float32),
-                     torch.tensor(x_crack_train, dtype=torch.float32),
+                     torch.tensor(x_crack_train, dtype=torch.float32),         
                      torch.tensor(x_tilt_train, dtype=torch.float32)], dim=-1)
 x_test = torch.cat([torch.tensor(x_settlement_test, dtype=torch.float32),
                     torch.tensor(x_crack_test, dtype=torch.float32),
@@ -472,14 +467,14 @@ scaler_response = scaler_crack
 for i in range(50):
     print(f"Run {i+1}/50")
     
-    model = TransformerCnn(response_dim=response_dim, env_dim=env_dim, trans_dim=trans_dim,
+    model = TransformerCnn(response_dim=response_dim, env_dim=env_dim, trans_dim=trans_dim, 
                            num_heads=num_heads, ff_hidden_dim=ff_hidden_dim, conv_hidden_dim=conv_hidden_dim, kernel_size=kernel_size,
                            dropout=dropout, n_steps=n, lag=lag, m=m).to(device)
-
+    
     r2_train_per_feature, r2_test_per_feature, rmse_train_per_feature, rmse_test_per_feature, \
-    mae_train_per_feature, mae_test_per_feature, output_train, output_test, history_records = train_and_test(
-        model, x_response_train, x_response_test, x_env_train, x_env_test, x_train, x_test,
-        y_response_train, y_response_test, scaler_response, num_epochs=200, patience=20)
+    mae_train_per_feature, mae_test_per_feature, output_train, output_test, history_records = train_and_test(                                                               
+        model, x_response_train, x_response_test, x_env_train, x_env_test, x_train, x_test, 
+        y_response_train, y_response_test, scaler_response, num_epochs=200, patience=20)        
 
     r2_test_sum = sum(value for value in r2_test_per_feature if value > 0)
     run_dir = os.path.join(analysis_save_dir, f"run_{i+1:02d}")
@@ -532,18 +527,7 @@ for i in range(50):
         "history": history_records,
     }
     save_json(os.path.join(run_dir, "run_summary.json"), run_summary)
-
-    state_dict_cpu = {k: v.detach().cpu() for k, v in model.state_dict().items()}
-    ensemble_models.append({
-        "score": r2_test_sum,
-        "state_dict": state_dict_cpu,
-        "run": i + 1,
-        "history": history_records,
-        "best_epoch_info": best_epoch_info,
-        "analysis_dir": run_dir,
-    })
-    ensemble_models = sorted(ensemble_models, key=lambda x: x["score"], reverse=True)[:ensemble_top_k]
-
+    
     if r2_test_sum > best_r2_sum:
         best_r2_sum = r2_test_sum
         best_r2_train = r2_train_per_feature
@@ -559,7 +543,7 @@ for i in range(50):
         best_run_dir = run_dir
         best_run_index = i + 1
         generate_intermediate_plots(model, run_dir, i + 1, prefix="best")
-
+        
         torch.save(model.state_dict(), r'best_crack_model.pth')
         with open(r'scaler_all.pkl', 'wb') as f:
             pickle.dump(scaler, f)
@@ -578,7 +562,7 @@ for idx in range(len(best_r2_train)):
     print(f"  MAE (test): {best_mae_test[idx]}")
 
 if best_epoch_info_summary and best_history_records and best_run_dir and best_run_index is not None:
-    plot_learning_curves(best_history_records, best_run_dir, best_run_index, prefix="best")
+        plot_learning_curves(best_history_records, best_run_dir, best_run_index, prefix="best")
 
 column_titles = feature_names
 
@@ -599,88 +583,14 @@ avg_r2_test = np.mean(best_r2_test)
 print(f"\nAverage R² (train): {avg_r2_train:.4f}")
 print(f"Average R² (test): {avg_r2_test:.4f}")
 print("="*60 + "\n")
-ensemble_metadata = []
-ensemble_mean_train = None
-ensemble_mean_test = None
-ensemble_metrics = {}
-if ensemble_models:
-    print(f"\nEnsemble Evaluation: Using Top {len(ensemble_models)} models")
-
-    ensemble_outputs_train = []
-    ensemble_outputs_test = []
-
-    for idx_model, member in enumerate(ensemble_models, 1):
-        score = member["score"]
-        state_dict = member["state_dict"]
-        run_idx = member["run"]
-        ensemble_model = TransformerCnn(response_dim=response_dim, env_dim=env_dim, trans_dim=trans_dim,
-                                        num_heads=num_heads, ff_hidden_dim=ff_hidden_dim, conv_hidden_dim=conv_hidden_dim,
-                                        kernel_size=kernel_size, dropout=dropout, n_steps=n, lag=lag, m=m).to(device)
-        ensemble_model.load_state_dict(state_dict)
-        ensemble_model.eval()
-        with torch.no_grad():
-            pred_train = ensemble_model(x_response_train, x_env_train, x_train).detach().cpu()
-            pred_test = ensemble_model(x_response_test, x_env_test, x_test).detach().cpu()
-        ensemble_outputs_train.append(pred_train)
-        ensemble_outputs_test.append(pred_test)
-        model_filename = os.path.join(ensemble_save_dir, f"ensemble_rank{idx_model}_run{run_idx}.pth")
-        torch.save(state_dict, model_filename)
-        ensemble_metadata.append({
-            "rank": idx_model,
-            "run": run_idx,
-            "r2_sum": score,
-            "path": model_filename,
-            "best_epoch_info": member.get("best_epoch_info"),
-        })
-        plot_learning_curves(member.get("history", []), ensemble_save_dir, run_idx, prefix=f"ensemble_rank{idx_model}")
-
-    ensemble_mean_train = torch.stack(ensemble_outputs_train, dim=0).mean(dim=0)
-    ensemble_mean_test = torch.stack(ensemble_outputs_test, dim=0).mean(dim=0)
-
-    y_train_np = scaler_response.inverse_transform(y_response_train.cpu().numpy().reshape(-1, y_response_train.shape[-1]))
-    y_test_np = scaler_response.inverse_transform(y_response_test.cpu().numpy().reshape(-1, y_response_test.shape[-1]))
-    ensemble_train_np = scaler_response.inverse_transform(ensemble_mean_train.numpy().reshape(-1, ensemble_mean_train.shape[-1]))
-    ensemble_test_np = scaler_response.inverse_transform(ensemble_mean_test.numpy().reshape(-1, ensemble_mean_test.shape[-1]))
-
-    ensemble_r2_train = []
-    ensemble_r2_test = []
-    ensemble_rmse_train = []
-    ensemble_rmse_test = []
-    ensemble_mae_train = []
-    ensemble_mae_test = []
-
-    for feature_idx in range(response_dim):
-        y_train_feature = y_train_np[:, feature_idx]
-        y_test_feature = y_test_np[:, feature_idx]
-        pred_train_feature = ensemble_train_np[:, feature_idx]
-        pred_test_feature = ensemble_test_np[:, feature_idx]
-
-        ensemble_r2_train.append(r2_score(y_train_feature, pred_train_feature))
-        ensemble_r2_test.append(r2_score(y_test_feature, pred_test_feature))
-        ensemble_rmse_train.append(np.sqrt(mean_squared_error(y_train_feature, pred_train_feature)))
-        ensemble_rmse_test.append(np.sqrt(mean_squared_error(y_test_feature, pred_test_feature)))
-        ensemble_mae_train.append(mean_absolute_error(y_train_feature, pred_train_feature))
-        ensemble_mae_test.append(mean_absolute_error(y_test_feature, pred_test_feature))
-
-        ensemble_metrics[column_titles[feature_idx]] = {
-            "r2_train": ensemble_r2_train[feature_idx],
-            "r2_test": ensemble_r2_test[feature_idx],
-            "rmse_train": ensemble_rmse_train[feature_idx],
-            "rmse_test": ensemble_rmse_test[feature_idx],
-            "mae_train": ensemble_mae_train[feature_idx],
-            "mae_test": ensemble_mae_test[feature_idx],
-        }
-
-    print(f"Average R² (train): {np.mean(ensemble_r2_train):.4f}")
-    print(f"Average R² (test): {np.mean(ensemble_r2_test):.4f}")
 
 def plot_individual_feature(y_train, y_train_pred, y_test, y_test_pred, column_titles):
     num_columns = y_train.shape[2]
     for i in range(num_columns):
         plt.figure(figsize=(15, 10))
-        y_combined = np.concatenate((y_train[:, :, i].detach().cpu().numpy(),
+        y_combined = np.concatenate((y_train[:, :, i].detach().cpu().numpy(), 
                                       y_test[:, :, i].detach().cpu().numpy()), axis=0)
-        y_pred_combined = np.concatenate((y_train_pred[:, :, i].detach().cpu().numpy(),
+        y_pred_combined = np.concatenate((y_train_pred[:, :, i].detach().cpu().numpy(), 
                                            y_test_pred[:, :, i].detach().cpu().numpy()), axis=0)
 
         plt.plot(y_combined.flatten(), label='True', alpha=0.7)
@@ -697,24 +607,24 @@ def plot_individual_feature(y_train, y_train_pred, y_test, y_test_pred, column_t
         plt.savefig(f'{column_titles[i]}_prediction.png', dpi=300, bbox_inches='tight')
         plt.close()
 
-plot_individual_feature(y_response_train, best_output_train, y_response_test, best_output_test, column_titles)
+plot_individual_feature(y_response_train, best_output_train, y_response_test, best_output_test, column_titles) 
 
 
 def save_training_testing_data(y_response_train, best_output_train, y_response_test, best_output_test, column_titles, file_prefix="settlement"):
     y_response_train_reshaped = scaler_response.inverse_transform(y_response_train.cpu().numpy().reshape(-1, y_response_train.shape[-1]))
     y_response_test_reshaped = scaler_response.inverse_transform(y_response_test.cpu().numpy().reshape(-1, y_response_test.shape[-1]))
     best_output_train_reshaped = scaler_response.inverse_transform(best_output_train.cpu().numpy().reshape(-1, best_output_train.shape[-1]))
-    best_output_test_reshaped = scaler_response.inverse_transform(best_output_test.cpu().numpy().reshape(-1, best_output_test.shape[-1]))
+    best_output_test_reshaped = scaler_response.inverse_transform(best_output_test.cpu().numpy().reshape(-1, best_output_test.shape[-1]))      
 
     train_data = np.column_stack((y_response_train_reshaped, best_output_train_reshaped))
     test_data = np.column_stack((y_response_test_reshaped, best_output_test_reshaped))
 
     train_columns = [f'{title}_True_Train' for title in column_titles] + [f'{title}_Pred_Train' for title in column_titles]
     test_columns = [f'{title}_True_Test' for title in column_titles] + [f'{title}_Pred_Test' for title in column_titles]
-
+    
     train_df = pd.DataFrame(train_data, columns=train_columns)
     test_df = pd.DataFrame(test_data, columns=test_columns)
-
+    
     train_df.insert(0, 'id', range(1, len(train_df) + 1))
     test_df.insert(0, 'id', range(1, len(test_df) + 1))
 
@@ -722,52 +632,4 @@ def save_training_testing_data(y_response_train, best_output_train, y_response_t
     test_df.to_csv(f"{file_prefix}_test.csv", index=False)
 
 save_training_testing_data(y_response_train, best_output_train, y_response_test, best_output_test, column_titles, file_prefix="crack_best_single")
-if ensemble_models:
-    ensemble_train_tensor = torch.tensor(ensemble_mean_train, device=device)
-    ensemble_test_tensor = torch.tensor(ensemble_mean_test, device=device)
-    save_training_testing_data(y_response_train, ensemble_train_tensor, y_response_test, ensemble_test_tensor, column_titles, file_prefix="crack_ensemble")
-
-    metadata_path = os.path.join(ensemble_save_dir, "ensemble_summary.json")
-    epoch_recommendations = []
-    for member in ensemble_models:
-        info = member.get("best_epoch_info")
-        if info and info.get("best_epochs"):
-            epoch_recommendations.extend(info["best_epochs"])
-    epoch_summary = None
-    if epoch_recommendations:
-        avg_epoch = mean(epoch_recommendations)
-        median_epoch = median(epoch_recommendations)
-        epoch_summary = {
-            "average": float(avg_epoch),
-            "median": float(median_epoch),
-            "all": epoch_recommendations,
-        }
-
-    with open(metadata_path, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "ensemble_top_k": ensemble_top_k,
-                "average_metrics": {
-                    "r2_train": np.mean(ensemble_r2_train),
-                    "r2_test": np.mean(ensemble_r2_test),
-                    "rmse_train": np.mean(ensemble_rmse_train),
-                    "rmse_test": np.mean(ensemble_rmse_test),
-                    "mae_train": np.mean(ensemble_mae_train),
-                    "mae_test": np.mean(ensemble_mae_test),
-                },
-                "per_feature_metrics": ensemble_metrics,
-                "models": ensemble_metadata,
-                "best_model": {
-                    "run": best_run_index,
-                    "analysis_dir": best_run_dir,
-                    "best_epoch_info": best_epoch_info_summary,
-                },
-                "epoch_summary": epoch_summary,
-            },
-            f,
-            ensure_ascii=False,
-            indent=2,
-        )
-    print(f"✓ Ensemble metadata saved: {metadata_path}")
 

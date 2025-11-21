@@ -6,7 +6,7 @@
 
 ## 📘 Project Overview
 
-The **SHM-System** is a web-based platform for visualizing real-time and historical structural health data, including settlement, tilt, crack width, and water level. It integrates multiple sensors and provides **trend analysis, automatic refresh, and predictive insights**. The system is suitable for historical building preservation, infrastructure monitoring, and research applications.
+The **SHM-System** is a web-based platform for structural health monitoring developed based on a Transformer Encoder-CNN hybrid deep learning model. It visualizes real-time and historical structural health data, including settlement, tilt, crack width, and water level. The system integrates multiple sensors and provides **trend analysis, automatic refresh, and predictive insights** through multi-step ahead predictions (60 minutes). The Transformer Encoder captures long-range temporal dependencies, while 1D-CNN extracts local features, enabling accurate multi-source data fusion and prediction. The system is suitable for historical building preservation, infrastructure monitoring, and research applications.
 
 ---
 
