@@ -96,7 +96,7 @@ class TransformerCnn(nn.Module):
 # ==========================================
 
 # API Base URL
-API_BASE_URL = "http://139.159.136.213:4999/iem/shm"
+API_BASE_URL = "my_url"
 
 # Device Numbers
 CRACK_NUMBERS = ["623622", "623641", "623628"]  # crack_1, crack_2, crack_3
