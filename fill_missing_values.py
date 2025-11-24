@@ -1,7 +1,3 @@
-"""
-合并数据空值填充：处理传感器断电造成的缺失值
-提供多种填充策略，保持数据准确性
-"""
 import csv
 import os
 import pandas as pd
@@ -9,29 +5,12 @@ import numpy as np
 from datetime import datetime
 
 def fill_missing_values(df, method='linear', max_gap_minutes=60, limit_direction='both'):
-    """
-    填充缺失值
-    
-    参数:
-        df: DataFrame，包含时间列和其他数据列
-        method: 填充方法
-            - 'linear': 线性插值（推荐，适合传感器数据）
-            - 'time': 时间加权线性插值（更准确，考虑时间间隔）
-            - 'forward': 前向填充（使用前一个值）
-            - 'backward': 后向填充（使用后一个值）
-            - 'forward-backward': 先前向填充，再后向填充
-            - 'polynomial': 多项式插值（需要数据足够）
-        max_gap_minutes: 最大允许插值的时间间隔（分钟），超过此间隔不进行插值
-        limit_direction: 插值方向 'both', 'forward', 'backward'
-    """
-    # 将time列转换为datetime类型
+
     df['time'] = pd.to_datetime(df['time'])
     df = df.set_index('time')
     
-    # 按时间排序
     df = df.sort_index()
-    
-    # 统计缺失值
+
     missing_stats = {}
     for col in df.columns:
         missing_count = df[col].isna().sum()
@@ -45,7 +24,6 @@ def fill_missing_values(df, method='linear', max_gap_minutes=60, limit_direction
             print(f"  {col}: {count} 个缺失值 ({percentage:.2f}%)")
         print()
     
-    # 对每列进行填充
     filled_df = df.copy()
     
     for col in df.columns:
@@ -108,16 +86,13 @@ def fill_missing_values(df, method='linear', max_gap_minutes=60, limit_direction
                     print(f"  警告: {col} 多项式插值失败，改用线性插值")
                     filled_df[col] = df[col].interpolate(method='linear', limit_direction=limit_direction)
     
-    # 重置索引，将time列恢复为普通列
     filled_df = filled_df.reset_index()
     filled_df['time'] = filled_df['time'].dt.strftime('%Y-%m-%d %H:%M:%S')
     
     return filled_df, missing_stats
 
 def process_merged_data(input_file, output_file, method='linear', max_gap_minutes=60):
-    """
-    处理合并数据，填充空值
-    """
+
     if not os.path.exists(input_file):
         print(f"错误: 文件不存在: {input_file}")
         return
@@ -181,13 +156,6 @@ def main():
         print(f"错误: 文件不存在: {input_file}")
         return
     
-    # 填充方法选择
-    # 'linear': 线性插值（推荐，适合传感器数据）
-    # 'time': 时间加权线性插值（更准确，考虑时间间隔）
-    # 'forward': 前向填充（使用前一个值）
-    # 'backward': 后向填充（使用后一个值）
-    # 'forward-backward': 先前向后向后填充
-    # 'polynomial': 多项式插值（需要数据足够）
     fill_method = 'time'  # 推荐使用 'time'，考虑时间间隔的线性插值
     max_gap_minutes = 60  # 最大允许插值的时间间隔（分钟），超过此间隔不进行插值
     
@@ -213,12 +181,7 @@ def main():
     print("=" * 60)
     print("处理完成！")
     print("=" * 60)
-    print()
-    print("建议:")
-    print("1. 查看填充后的数据，检查填充效果")
-    print("2. 如果断电时间过长（>60分钟），建议保持为空或手动处理")
-    print("3. 可以根据实际情况调整 max_gap_minutes 参数")
-    print("4. 也可以尝试其他填充方法（forward, backward等）")
+
 
 if __name__ == "__main__":
     main()
