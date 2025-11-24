@@ -12,6 +12,7 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    host: '0.0.0.0', // 绑定到所有网络接口，确保可以通过localhost访问
     open: true,
     proxy: {
       '/api': {

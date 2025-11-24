@@ -12,29 +12,47 @@
         <div class="header-section">
           <div class="header">
             <h2>Chinese Heritage Building - Yuhuang Pavilion Structural Health Monitoring</h2>
-            <div class="refresh-info">
+            
+          </div>
+          <div class="refresh-info">
               <span>Data Update Time: {{ lastUpdateTime }}</span>
               <el-button size="small" @click="refreshData">Manual Refresh</el-button>
+              <span class="connection-status" :class="{ 'connected': connectionStatus.connected, 'disconnected': !connectionStatus.connected }">
+                {{ connectionStatus.connected ? '● Connected' : '○ Disconnected' }}
+              </span>
             </div>
-          </div>
-          
           <!-- Building Introduction and History -->
           <div class="building-intro">
             <h3>Building Introduction</h3>
-            <p>Yuhuang Pavilion, also known as Jingbian Tower, is a Ming Dynasty religious building located on the north city wall of Yu County, Hebei Province. Built in 1377 and listed as a national key cultural relic protection unit in 1996, it served both religious and defensive purposes. Among the 24 towers once on the city wall, this pavilion stands as the most magnificent.</p>
-            
-            <h3>Main Features</h3>
-            <p>The south-facing complex covers approximately 2,000 square meters, featuring a triple-eave Xieshan glazed tile roof main hall. The structure retains Ming Dynasty large timber construction, with three-story pavilions and symmetrical layout. Notable elements include bell and drum towers, Ming and Qing steles, and decorative brick reliefs.</p>
+            <p>
+              Yuhuang Pavilion (蔚州玉皇阁), also known as Jingbian Tower, is a Ming Dynasty religious building located in Yu County, Hebei Province. 
+              For more detailed information, please visit: 
+              <a href="https://zh.wikipedia.org/wiki/%E7%8E%89%E7%9A%87%E9%98%81" target="_blank" rel="noopener noreferrer" class="wiki-link">
+                Wikipedia - 玉皇阁
+              </a>
+            </p>
          </div>
 
-          <!-- Prediction Accuracy Metrics -->
+          <!-- Realtime Crack Status (Current + Next 1 Hour) -->
           <div class="accuracy-section">
-            <h3>Prediction Accuracy</h3>
+            <h3>Realtime Crack Status</h3>
             <div class="accuracy-metrics">
-              <div class="metric-card" v-for="(metric, index) in accuracyMetrics" :key="index">
-                <div class="metric-label">{{ metric.label }}</div>
-                <div class="metric-value">{{ metric.value }}</div>
-                <div class="metric-desc">{{ metric.description }}</div>
+              <div class="metric-card">
+                <div class="metric-label">Current Time</div>
+                <div class="metric-value">{{ crackStatus.currentTime }}</div>
+                <div class="metric-desc">Timestamp of latest crack measurement</div>
+        </div>
+              <div class="metric-card">
+                <div class="metric-label">Current Crack (True / Predicted)</div>
+                <div class="metric-value">
+                  {{ crackStatus.currentTrue }} mm / {{ crackStatus.currentPred }} mm
+                </div>
+                <div class="metric-desc">Latest measured value and model estimate for the main crack sensor</div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Next 1 Hour Predicted Status</div>
+                <div class="metric-value">{{ crackStatus.futureSummary }}</div>
+                <div class="metric-desc">Predicted maximum crack width and change within the next 60 minutes</div>
               </div>
             </div>
           </div>
@@ -170,6 +188,12 @@ const lastUpdateTime = ref<string>("");
 let refreshTimer: number | null = null;
 const REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
 
+// Connection Status
+const connectionStatus = ref<{ connected: boolean; message: string }>({
+  connected: false,
+  message: "Checking connection..."
+});
+
 // Prediction Accuracy Metrics
 interface AccuracyMetric {
   label: string;
@@ -183,6 +207,21 @@ const accuracyMetrics = ref<AccuracyMetric[]>([
   { label: "MAE", value: "-", description: "Mean Absolute Deviation (mm)" },
   { label: "Prediction Stability", value: "-", description: "Standard Deviation of Predictions (mm)" }
 ]);
+
+// Realtime crack status (current + next 1 hour)
+interface CrackStatus {
+  currentTime: string;
+  currentTrue: string;
+  currentPred: string;
+  futureSummary: string;
+}
+
+const crackStatus = ref<CrackStatus>({
+  currentTime: "-",
+  currentTrue: "-",
+  currentPred: "-",
+  futureSummary: "-"
+});
 
 // ==========================================
 // Unified Data Processing Utility Functions
@@ -323,6 +362,27 @@ interface ModelMetricsResponse {
   };
 }
 
+interface RealTimeAccuracyResponse {
+  success: boolean;
+  data?: {
+    average: {
+      r2: number | null;
+      rmse: number | null;
+      mae: number | null;
+      sample_count: number;
+    };
+    per_sensor: Record<number, {
+      r2: number;
+      rmse: number;
+      mae: number;
+      sample_count: number;
+    }>;
+    matched_pairs_count: number;
+    timestamp: number;
+  };
+  message?: string;
+}
+
 async function fetchPredictionData() {
   try {
     const response = await axios.get<PredictionResponse>(
@@ -335,6 +395,7 @@ async function fetchPredictionData() {
       }
     );
     if (response.data.success && response.data.data) {
+      connectionStatus.value = { connected: true, message: "Connected" };
       console.log(`Successfully fetched ${response.data.data.count} prediction points`);
       return response.data.data.predictions;
     }
@@ -342,11 +403,14 @@ async function fetchPredictionData() {
     return [];
   } catch (error: any) {
     if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+      connectionStatus.value = { connected: false, message: "Cannot connect to backend at http://localhost:5000" };
       console.warn("Cannot connect to prediction service at http://localhost:5000. Please ensure the backend service is running.");
     } else if (error.response) {
       // Server responded with error status
+      connectionStatus.value = { connected: false, message: `Backend error: ${error.response.status}` };
       console.warn(`Prediction API error: ${error.response.status} - ${error.response.data?.message || error.message}`);
     } else {
+      connectionStatus.value = { connected: false, message: "Connection error" };
       console.warn("Failed to fetch prediction data:", error.message);
     }
     return [];
@@ -371,6 +435,28 @@ async function fetchModelMetrics() {
     return null;
   } catch (error) {
     console.warn("Failed to fetch model metrics, using default values");
+    return null;
+  }
+}
+
+// Fetch real-time prediction accuracy from backend
+async function fetchRealTimeAccuracy() {
+  try {
+    const response = await axios.get<RealTimeAccuracyResponse>(
+      "http://localhost:5000/api/predictions/accuracy",
+      {
+        timeout: 10000,
+        headers: {
+          'Accept': 'application/json'
+        }
+      }
+    );
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    return null;
+  } catch (error) {
+    console.warn("Failed to fetch real-time accuracy:", error);
     return null;
   }
 }
@@ -501,7 +587,7 @@ function createChartOption(
           // Collect all prediction timestamps (past 12 hours + future 1 hour)
           // Exclude connection points that match historical data timestamp exactly
           // Only exclude if timestamp AND value are the same as last historical point
-          predictionTimestamps.push(point[0]);
+            predictionTimestamps.push(point[0]);
         }
       });
     });
@@ -981,19 +1067,93 @@ function processWaterLevelData(data: WaterLevelDataPoint[]) {
   }));
 }
 
-// Calculate Prediction Accuracy Metrics
+// Calculate Prediction Accuracy Metrics & Realtime Crack Status
 async function calculateAccuracyMetrics(crackData: CrackDataPoint[], predictionData: PredictionPoint[]) {
-  // Fetch model training metrics first (if available)
+  // Optionally fetch model training metrics (used as fallback in some calculations)
   const modelMetrics = await fetchModelMetrics();
-  
   // Use the same processing logic as processCrackData to ensure consistency
   const { series: crackSeries, predictionSeries } = processCrackData(crackData, predictionData);
   
+  // Update realtime crack status (current + next 1 hour)
+  try {
+    const mainSensor = CRACK_NUMBERS[0];
+    const mainHistSeries = crackSeries?.find(s => s.name === mainSensor);
+    const mainPredSeries = predictionSeries?.find(p => p.name === mainSensor);
+
+    if (mainHistSeries && mainHistSeries.data.length > 0) {
+      const lastPoint = mainHistSeries.data[mainHistSeries.data.length - 1];
+      const lastTime = lastPoint[0];
+      const lastValue = lastPoint[1] as number | null;
+
+      crackStatus.value.currentTime = new Date(lastTime).toLocaleString("en-US");
+      crackStatus.value.currentTrue =
+        typeof lastValue === "number" && !isNaN(lastValue) ? lastValue.toFixed(3) : "-";
+
+      // Find closest prediction around current time
+      let closestPredVal: number | null = null;
+      let minDiff = Number.POSITIVE_INFINITY;
+      if (mainPredSeries && mainPredSeries.data.length > 0) {
+        mainPredSeries.data.forEach(p => {
+          const t = p[0];
+          const v = p[1] as number | null;
+          if (v === null || isNaN(v)) return;
+          const diff = Math.abs(t - lastTime);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestPredVal = v;
+          }
+        });
+      }
+
+      if (typeof closestPredVal === "number" && !isNaN(closestPredVal)) {
+        const cp: number = closestPredVal as number;
+        crackStatus.value.currentPred = cp.toFixed(3);
+      } else {
+        crackStatus.value.currentPred = "No recent prediction";
+      }
+
+      // Compute future 1-hour predicted status
+      let maxFuture: number | null = null;
+      if (mainPredSeries && mainPredSeries.data.length > 0) {
+        const oneHourMs = 60 * 60 * 1000;
+        mainPredSeries.data.forEach(p => {
+          const t = p[0];
+          const v = p[1] as number | null;
+          if (v === null || isNaN(v)) return;
+          if (t > lastTime && t <= lastTime + oneHourMs) {
+            if (maxFuture === null || v > maxFuture) {
+              maxFuture = v;
+            }
+          }
+        });
+      }
+
+      if (typeof maxFuture === "number" && !isNaN(maxFuture)) {
+        const maxVal: number = maxFuture as number;
+        const base = lastValue !== null && !isNaN(lastValue) ? lastValue : 0;
+        const deltaVal: number = maxVal - base;
+        const absDelta = Math.abs(deltaVal);
+        let statusText = "Stable";
+        if (absDelta >= 0.2) {
+          statusText = "Significant change";
+        } else if (absDelta >= 0.05) {
+          statusText = "Mild change";
+        }
+        crackStatus.value.futureSummary = `${maxVal.toFixed(3)} mm (Δ=${deltaVal.toFixed(3)} mm, Status: ${statusText})`;
+      } else {
+        crackStatus.value.futureSummary = "No prediction available for next 1 hour";
+      }
+    } else {
+      crackStatus.value.currentTime = "-";
+      crackStatus.value.currentTrue = "-";
+      crackStatus.value.currentPred = "-";
+      crackStatus.value.futureSummary = "No data";
+    }
+  } catch (e) {
+    crackStatus.value.futureSummary = "Status calculation error";
+  }
+
   if (!crackData || crackData.length === 0 || !crackSeries || crackSeries.length === 0) {
-    accuracyMetrics.value[0].value = "0.85";
-    accuracyMetrics.value[1].value = "No historical data";
-    accuracyMetrics.value[2].value = "No historical data";
-    accuracyMetrics.value[3].value = "No historical data";
     return;
   }
 
@@ -1419,6 +1579,24 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
+.connection-status {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-left: 10px;
+}
+
+.connection-status.connected {
+  color: #67c23a;
+  background-color: #f0f9ff;
+}
+
+.connection-status.disconnected {
+  color: #f56c6c;
+  background-color: #fef0f0;
+}
+
 .building-intro {
   margin-top: 0;
 }
@@ -1442,6 +1620,23 @@ onUnmounted(() => {
   color: #606266;
   font-size: 14px;
   text-align: justify;
+}
+
+.building-intro .wiki-link {
+  color: #409eff;
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.building-intro .wiki-link:hover {
+  color: #66b1ff;
+  border-bottom-color: #66b1ff;
+}
+
+.building-intro .wiki-link:visited {
+  color: #409eff;
 }
 
 .accuracy-section {

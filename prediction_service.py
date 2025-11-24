@@ -767,6 +767,131 @@ def get_model_metrics():
     })
 
 
+@app.route('/api/predictions/accuracy', methods=['GET'])
+def get_prediction_accuracy():
+    """Get real-time prediction accuracy by matching predictions with historical true values"""
+    global prediction_storage
+    
+    try:
+        # Fetch current sensor data to get true values
+        sensor_data = fetch_all_sensor_data()
+        df = process_sensor_data_to_dataframe(sensor_data)
+        
+        # Get current time
+        now = datetime.now()
+        past_time = now - timedelta(hours=12)  # Look back 12 hours for matched pairs
+        
+        # Store predictions by base_time (prediction batch)
+        prediction_batches = {}  # {base_time_str: [pred_points]}
+        
+        # Group predictions by their original base_time
+        # Note: We need to store base_time with each prediction point
+        # For now, we'll estimate base_time from prediction time (pred_time - prediction_step * 10min)
+        
+        matched_pairs = []  # List of {pred_time, pred_value, true_value, sensor_id}
+        
+        # Match predictions with true values
+        for pred_point in prediction_storage.values():
+            pred_time_str = pred_point['time']
+            pred_time = datetime.strptime(pred_time_str, "%Y-%m-%d %H:%M:%S")
+            
+            # Only process predictions in the past (can be validated)
+            if pred_time <= now:
+                # Find corresponding true value from historical data
+                # Match within 2 minutes for accuracy
+                matching_times = [t for t in df.index if abs((t - pred_time).total_seconds()) < 120]
+                
+                if matching_times:
+                    true_time = matching_times[0]
+                    
+                    # Get true values for all 3 crack sensors
+                    for sensor_idx in range(3):
+                        sensor_col = f'crack_{sensor_idx+1}'
+                        if sensor_col in df.columns:
+                            true_value = df.loc[true_time, sensor_col]
+                            pred_value = pred_point.get(f'crack_{sensor_idx+1}')
+                            
+                            if true_value is not None and not pd.isna(true_value) and pred_value is not None:
+                                matched_pairs.append({
+                                    'timestamp': int(pred_time.timestamp()),
+                                    'time': pred_time_str,
+                                    'sensor_id': sensor_idx + 1,
+                                    'predicted': float(pred_value),
+                                    'true': float(true_value),
+                                    'error': float(abs(true_value - pred_value))
+                                })
+        
+        # Calculate metrics for matched pairs
+        if len(matched_pairs) > 0:
+            # Group by sensor
+            sensors = {1: [], 2: [], 3: []}
+            for pair in matched_pairs:
+                sensors[pair['sensor_id']].append(pair)
+            
+            # Calculate metrics per sensor
+            metrics_per_sensor = {}
+            for sensor_id, pairs in sensors.items():
+                if len(pairs) >= 2:  # Need at least 2 points for R²
+                    true_vals = [p['true'] for p in pairs]
+                    pred_vals = [p['predicted'] for p in pairs]
+                    
+                    # Calculate R²
+                    mean_true = sum(true_vals) / len(true_vals)
+                    ss_res = sum((true_vals[i] - pred_vals[i])**2 for i in range(len(true_vals)))
+                    ss_tot = sum((true_vals[i] - mean_true)**2 for i in range(len(true_vals)))
+                    r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+                    
+                    # Calculate RMSE
+                    rmse = (ss_res / len(true_vals)) ** 0.5
+                    
+                    # Calculate MAE
+                    mae = sum(abs(true_vals[i] - pred_vals[i]) for i in range(len(true_vals))) / len(true_vals)
+                    
+                    metrics_per_sensor[sensor_id] = {
+                        'r2': r2,
+                        'rmse': rmse,
+                        'mae': mae,
+                        'sample_count': len(pairs)
+                    }
+            
+            # Calculate average metrics across all sensors
+            if metrics_per_sensor:
+                avg_r2 = sum(m['r2'] for m in metrics_per_sensor.values()) / len(metrics_per_sensor)
+                avg_rmse = sum(m['rmse'] for m in metrics_per_sensor.values()) / len(metrics_per_sensor)
+                avg_mae = sum(m['mae'] for m in metrics_per_sensor.values()) / len(metrics_per_sensor)
+                total_samples = sum(m['sample_count'] for m in metrics_per_sensor.values())
+            else:
+                avg_r2 = avg_rmse = avg_mae = None
+                total_samples = 0
+        else:
+            metrics_per_sensor = {}
+            avg_r2 = avg_rmse = avg_mae = None
+            total_samples = 0
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'average': {
+                    'r2': avg_r2,
+                    'rmse': avg_rmse,
+                    'mae': avg_mae,
+                    'sample_count': total_samples
+                },
+                'per_sensor': metrics_per_sensor,
+                'matched_pairs_count': len(matched_pairs),
+                'timestamp': int(time.time())
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Error calculating accuracy: {str(e)}'
+        }), 500
+
+
 # ==========================================
 # Main Program
 # ==========================================
