@@ -324,7 +324,7 @@ function getTimeRange(): { timestamp1: number; timestamp2: number } {
 async function fetchCrackData() {
   const { timestamp1, timestamp2 } = getTimeRange();
   const response = await axios.get<CrackDataPoint[]>(
-    "http://139.159.136.213:4999/iem/shm/jmData",
+    "/Data",
     {
       params: { timestamp1, timestamp2 },
       timeout: 15000
@@ -464,7 +464,7 @@ async function fetchRealTimeAccuracy() {
 async function fetchTiltData() {
   const { timestamp1, timestamp2 } = getTimeRange();
   const response = await axios.get<TiltDataPoint[]>(
-    "http://139.159.136.213:4999/iem/shm/jmBus",
+    "/Bus",
     {
       params: { timestamp1, timestamp2 },
       timeout: 15000
@@ -476,7 +476,7 @@ async function fetchTiltData() {
 async function fetchLevelData() {
   const { timestamp1, timestamp2 } = getTimeRange();
   const response = await axios.get<LevelDataPoint[]>(
-    "http://139.159.136.213:4999/iem/shm/jmLevel",
+    "/Level",
     {
       params: { timestamp1, timestamp2 },
       timeout: 15000
@@ -488,7 +488,7 @@ async function fetchLevelData() {
 async function fetchWaterLevelData() {
   const { timestamp1, timestamp2 } = getTimeRange();
   const response = await axios.get<WaterLevelDataPoint[]>(
-    "http://139.159.136.213:4999/iem/shm/jmWlg",
+    "/Wlg",
     {
       params: { timestamp1, timestamp2 },
       timeout: 15000
