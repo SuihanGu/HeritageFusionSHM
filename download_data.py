@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import os
 
 # API 基础地址
-BASE_URL = "http://139.159.136.213:4999/iem/shm"
+BASE_URL = "my_url"
 
 # 接口列表
 APIS = {
