@@ -134,28 +134,6 @@ SHM-System/
 
 ---
 
-## 📊 Prediction Accuracy Metrics
-
-The system displays four **real-time prediction accuracy metrics** in the dashboard:
-
-### 1. **R² Score** (Coefficient of Determination)
-- Real-time calculation by matching predictions with historical true values
-- Calculated per sensor (3 crack sensors) then averaged
-- Falls back to training-phase R² (~0.88) if insufficient samples
-
-### 2. **RMSE** (Root Mean Squared Error)
-- Real-time calculation from matched prediction-true value pairs
-- Formula: `√(Σ(真实值 - 预测值)² / n)`
-- Displays sample count (e.g., "Real-time (72 matched points)")
-
-### 3. **MAE** (Mean Absolute Error)
-- Real-time calculation from matched prediction-true value pairs
-- Formula: `Σ|真实值 - 预测值| / n`
-- Displays sample count
-
-### 4. **Prediction Stability** (Standard Deviation)
-- Calculated from all prediction values (past 12 hours + future 1 hour)
-- Measures consistency and stability of predictions across time
 
 **Implementation**: Metrics are calculated via `/api/predictions/accuracy` endpoint, matching predictions with historical data within 2-minute tolerance. Data range: past 12 hours of predictions with corresponding true values. Updates automatically every 10 minutes.
 
